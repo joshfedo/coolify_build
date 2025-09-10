@@ -1,4 +1,4 @@
-FROM alpine:3.18
+FROM docker:24-dind
 
 RUN apk add --no-cache \
     bash \
@@ -11,9 +11,13 @@ RUN apk add --no-cache \
     gzip
 
 COPY scripts/ /scripts/
+COPY deploy.sh /deploy.sh
+COPY Dockerfile.init /Dockerfile.init
+
 RUN chmod +x /scripts/*.sh
 RUN chmod +x /scripts/**/*.sh
+RUN chmod +x /deploy.sh
 
-WORKDIR /scripts
+WORKDIR /workspace
 
-ENTRYPOINT ["/scripts/orchestrator.sh"]
+CMD ["/deploy.sh"]
