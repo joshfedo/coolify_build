@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   db:
     image: mariadb:${DB_IMAGE_TAG:-10.6}

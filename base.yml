@@ -1,0 +1,21 @@
+version: '3.8'
+
+# Base configuration - can be overridden by project files
+services: {}
+
+# Default networks for all Magento projects
+networks:
+  magento-network:
+    driver: bridge
+  coolify-network:
+    name: coolify
+    external: true
+
+# Default volumes for all Magento projects  
+volumes:
+  dbdata:
+    driver: local
+  magento-code:
+    driver: local
+  db-backups:
+    driver: local

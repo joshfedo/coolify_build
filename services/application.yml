@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   magento:
     image: shinsenter/magento:${PHP_IMAGE_TAG:-php8.2-nginx}
@@ -19,13 +20,13 @@ services:
       - M2_ADMIN_USER=${COOLIFY_ENV_ADMIN_USER:-admin}
       - M2_ADMIN_PASSWORD=${COOLIFY_ENV_ADMIN_PASSWORD:-Password123!}
       - COOLIFY_PREVIEW_DEPLOYMENT=${COOLIFY_PREVIEW_DEPLOYMENT}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.magento-poc.rule=Host(`${COOLIFY_FQDN}`)"
-      - "traefik.http.routers.magento-poc.entrypoints=websecure"
-      - "traefik.http.routers.magento-poc.tls=true"
-      - "traefik.http.routers.magento-poc.tls.certresolver=letsencrypt"
-      - "traefik.http.services.magento-poc.loadbalancer.server.port=80"
+      # Coolify Magic Environment Variables
+      - SERVICE_FQDN_MAGENTO
+      - SERVICE_URL_MAGENTO
+      - SERVICE_PASSWORD_MAGENTO
+    expose:
+      - "80"
+    # Note: NO ports declaration - Coolify handles routing via Traefik
     depends_on:
       - db
       - redis
