@@ -11,7 +11,7 @@ echo "Building Magento Init Container"
 echo "Version: $VERSION"
 echo "Registry: $REGISTRY_URL"
 
-docker build -t "$REGISTRY_URL/$IMAGE_NAME:$VERSION" .
+docker build -f Dockerfile.init -t "$REGISTRY_URL/$IMAGE_NAME:$VERSION" .
 
 echo "Logging into registry"
 echo "$REGISTRY_PASS" | docker login "$REGISTRY_URL" -u "$REGISTRY_USER" --password-stdin

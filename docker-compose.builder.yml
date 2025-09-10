@@ -4,7 +4,8 @@ services:
   builder:
     build:
       context: .
-      dockerfile: Dockerfile.builder
+      dockerfile: Dockerfile
+    privileged: true
     environment:
       - REGISTRY_URL=${REGISTRY_URL:-docker-reg.ubuntu.orb.local}
       - REGISTRY_USER=${REGISTRY_USER:-testuser}
@@ -17,6 +18,8 @@ services:
     working_dir: /workspace
     command: |
       sh -c "
+        dockerd-entrypoint.sh &
+        sleep 5
         echo 'Starting build process'
         /deploy.sh
         echo 'Build and push completed'
