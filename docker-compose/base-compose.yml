@@ -1,0 +1,158 @@
+version: '3.8'
+
+x-common-env: &common-env
+  COOLIFY_DATABASE_NAME: ${COOLIFY_DATABASE_NAME}
+  COOLIFY_DATABASE_USER: ${COOLIFY_DATABASE_USER}
+  COOLIFY_DATABASE_PASSWORD: ${COOLIFY_DATABASE_PASSWORD}
+  COOLIFY_PREVIEW_DEPLOYMENT: ${COOLIFY_PREVIEW_DEPLOYMENT}
+  COOLIFY_FQDN: ${COOLIFY_FQDN}
+
+services:
+  magento-init:
+    image: ${REGISTRY_URL}/magento-init:${INIT_VERSION:-latest}
+    networks:
+      - magento-network
+    environment:
+      <<: *common-env
+      SETUP_MODE: ${SETUP_MODE:-auto}
+      MAIN_APP_URL: ${MAIN_APP_URL:-}
+      M2_DB_HOST: db
+      M2_DB_NAME: ${COOLIFY_DATABASE_NAME:-magento}
+      M2_DB_USER: ${COOLIFY_DATABASE_USER:-magento}
+      M2_DB_PASSWORD: ${COOLIFY_DATABASE_PASSWORD:-magento_password}
+      COOLIFY_DATABASE_ROOT_PASSWORD: ${COOLIFY_DATABASE_ROOT_PASSWORD:-root_password}
+      M2_REDIS_HOST: redis
+      M2_OPENSEARCH_HOST: opensearch
+      M2_BASE_URL: https://${COOLIFY_FQDN}/
+      M2_ADMIN_USER: ${COOLIFY_ENV_ADMIN_USER:-admin}
+      M2_ADMIN_PASSWORD: ${COOLIFY_ENV_ADMIN_PASSWORD:-Password123!}
+    volumes:
+      - magento-code:/var/www/html
+      - db-backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      opensearch:
+        condition: service_started
+    restart: "no"
+
+  db:
+    image: mariadb:${DB_IMAGE_TAG:-10.6}
+    networks:
+      - magento-network
+    environment:
+      MYSQL_ROOT_PASSWORD: ${COOLIFY_DATABASE_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${COOLIFY_DATABASE_NAME:-magento}
+      MYSQL_USER: ${COOLIFY_DATABASE_USER:-magento}
+      MYSQL_PASSWORD: ${COOLIFY_DATABASE_PASSWORD:-magento_password}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - db-backups:/backups
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  magento:
+    image: shinsenter/magento:${PHP_IMAGE_TAG:-php8.2-nginx}
+    networks:
+      - magento-network
+      - coolify-network
+    environment:
+      <<: *common-env
+      M2_DB_HOST: db
+      M2_DB_NAME: ${COOLIFY_DATABASE_NAME:-magento}
+      M2_DB_USER: ${COOLIFY_DATABASE_USER:-magento}
+      M2_DB_PASSWORD: ${COOLIFY_DATABASE_PASSWORD:-magento_password}
+      M2_REDIS_HOST: redis
+      M2_SEARCH_ENGINE: opensearch
+      M2_OPENSEARCH_HOST: opensearch
+      M2_BASE_URL: https://${COOLIFY_FQDN}/
+      M2_ADMIN_USER: ${COOLIFY_ENV_ADMIN_USER:-admin}
+      M2_ADMIN_PASSWORD: ${COOLIFY_ENV_ADMIN_PASSWORD:-Password123!}
+    volumes:
+      - magento-code:/var/www/html
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.magento.rule=Host(`${COOLIFY_FQDN}`) && !PathPrefix(`/backup`)"
+      - "traefik.http.routers.magento.entrypoints=websecure"
+      - "traefik.http.routers.magento.tls=true"
+      - "traefik.http.routers.magento.tls.certresolver=letsencrypt"
+      - "traefik.http.services.magento.loadbalancer.server.port=80"
+    depends_on:
+      magento-init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+
+  backup-server:
+    image: nginx:alpine
+    networks:
+      - magento-network
+      - coolify-network
+    volumes:
+      - db-backups:/usr/share/nginx/html/backup:ro
+    environment:
+      - COOLIFY_PREVIEW_DEPLOYMENT
+    command: |
+      sh -c "
+        if [ \"$$COOLIFY_PREVIEW_DEPLOYMENT\" = \"true\" ]; then
+          echo 'Backup server not needed in preview environment'
+          exit 0
+        fi
+        
+        cat > /etc/nginx/conf.d/default.conf << 'EOF'
+        server {
+            listen 80;
+            server_name _;
+            location /backup/ {
+                root /usr/share/nginx/html;
+                autoindex on;
+                add_header Access-Control-Allow-Origin *;
+            }
+            location / {
+                return 404;
+            }
+        }
+        EOF
+        
+        nginx -g 'daemon off;'
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backup-server.rule=Host(`${COOLIFY_FQDN}`) && PathPrefix(`/backup`)"
+      - "traefik.http.routers.backup-server.entrypoints=websecure"
+      - "traefik.http.routers.backup-server.tls=true"
+      - "traefik.http.routers.backup-server.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backup-server.loadbalancer.server.port=80"
+    profiles:
+      - backup
+
+  opensearch:
+    image: opensearchproject/opensearch:${OPENSEARCH_IMAGE_TAG:-2.5.0}
+    networks:
+      - magento-network
+    environment:
+      - "discovery.type=single-node"
+      - "plugins.security.disabled=true"
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+
+  redis:
+    image: redis:${REDIS_IMAGE_TAG:-6.2-alpine}
+    networks:
+      - magento-network
+
+networks:
+  magento-network:
+  coolify-network:
+    name: coolify
+    external: true
+
+volumes:
+  dbdata:
+  magento-code:
+  db-backups:

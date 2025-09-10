@@ -1,0 +1,5 @@
+scripts/
+docker-compose/
+.git/
+*.log
+.DS_Store
