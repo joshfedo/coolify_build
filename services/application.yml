@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  magento:
+    image: shinsenter/magento:${PHP_IMAGE_TAG:-php8.2-nginx}
+    networks:
+      - magento-network
+      - coolify-network
+    volumes:
+      - magento-code:/var/www/html
+    environment:
+      - M2_DB_HOST=db
+      - M2_DB_NAME=${COOLIFY_DATABASE_NAME:-magento}
+      - M2_DB_USER=${COOLIFY_DATABASE_USER:-magento}
+      - M2_DB_PASSWORD=${COOLIFY_DATABASE_PASSWORD:-magento_password}
+      - M2_REDIS_HOST=redis
+      - M2_SEARCH_ENGINE=opensearch
+      - M2_OPENSEARCH_HOST=opensearch
+      - M2_BASE_URL=https://${COOLIFY_FQDN:-localhost}/
+      - M2_ADMIN_USER=${COOLIFY_ENV_ADMIN_USER:-admin}
+      - M2_ADMIN_PASSWORD=${COOLIFY_ENV_ADMIN_PASSWORD:-Password123!}
+      - COOLIFY_PREVIEW_DEPLOYMENT=${COOLIFY_PREVIEW_DEPLOYMENT}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.magento-poc.rule=Host(`${COOLIFY_FQDN}`)"
+      - "traefik.http.routers.magento-poc.entrypoints=websecure"
+      - "traefik.http.routers.magento-poc.tls=true"
+      - "traefik.http.routers.magento-poc.tls.certresolver=letsencrypt"
+      - "traefik.http.services.magento-poc.loadbalancer.server.port=80"
+    depends_on:
+      - db
+      - redis
+      - opensearch

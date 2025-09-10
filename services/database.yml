@@ -1,0 +1,53 @@
+version: '3.8'
+services:
+  db:
+    image: mariadb:${DB_IMAGE_TAG:-10.6}
+    networks:
+      - magento-network
+    environment:
+      - MYSQL_ROOT_PASSWORD=${COOLIFY_DATABASE_ROOT_PASSWORD:-root_password}
+      - MYSQL_DATABASE=${COOLIFY_DATABASE_NAME:-magento}
+      - MYSQL_USER=${COOLIFY_DATABASE_USER:-magento}
+      - MYSQL_PASSWORD=${COOLIFY_DATABASE_PASSWORD:-magento_password}
+      - COOLIFY_PREVIEW_DEPLOYMENT=${COOLIFY_PREVIEW_DEPLOYMENT}
+      - COOLIFY_FQDN=${COOLIFY_FQDN}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - db-backups:/backups
+    command: |
+      bash -c "
+        docker-entrypoint.sh mysqld &
+        MYSQL_PID=$$!
+        if [ \"$$COOLIFY_PREVIEW_DEPLOYMENT\" == \"true\" ]; then
+          echo '🔎 Preview environment detected. Waiting for database...'
+          for i in {1..60}; do
+            if mysqladmin ping -h localhost --silent; then
+              echo '✅ Database is ready.'
+              if [ -f /backups/latest.sql ]; then
+                echo '📥 Found database backup, starting import...'
+                mysql -u root -p\"$$MYSQL_ROOT_PASSWORD\" \"$$MYSQL_DATABASE\" < /backups/latest.sql
+                echo '✅ Database import complete.'
+                echo '🔧 Sanitizing database for preview environment...'
+                if [ -n \"$$COOLIFY_FQDN\" ]; then
+                  echo \"✅ FQDN found: $$COOLIFY_FQDN. Updating base URLs...\"
+                  mysql -u root -p\"$$MYSQL_ROOT_PASSWORD\" \"$$MYSQL_DATABASE\" -e \"
+                    UPDATE core_config_data SET value = 'https://$$COOLIFY_FQDN/' WHERE path IN ('web/unsecure/base_url', 'web/secure/base_url');
+                  \"
+                else
+                  echo \"⚠️ COOLIFY_FQDN is empty. Skipping base URL update.\"
+                fi
+                mysql -u root -p\"$$MYSQL_ROOT_PASSWORD\" \"$$MYSQL_DATABASE\" -e \"
+                  UPDATE core_config_data SET value = '1' WHERE path LIKE '%dev/debug%';
+                  UPDATE core_config_data SET value = 'sandbox' WHERE path LIKE '%payment%mode%';
+                \"
+                echo '✅ Database sanitization complete.'
+              else
+                echo '⚠️ No backup found. Starting with a fresh database.'
+              fi
+              break
+            fi
+            sleep 1
+          done
+        fi
+        wait $$MYSQL_PID
+      "
