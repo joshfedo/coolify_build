@@ -36,8 +36,11 @@ services:
       - opensearch
 
   db:
-    # Use the versioned image from GitHub Packages
-    image: ghcr.io/joshfedo/magento2/db:${DB_IMAGE_TAG:-10.6}
+    # Build from the db directory
+    build:
+      context: ./db
+      args:
+        MARIADB_VERSION: ${DB_IMAGE_TAG:-10.6}
     networks:
       - magento-network
     environment:
@@ -51,8 +54,11 @@ services:
       - db-backups:/backups
 
   db-backup:
-    # Use the versioned image from GitHub Packages
-    image: ghcr.io/joshfedo/magento2/db-backup:${DB_IMAGE_TAG:-10.6}
+    # Build from the backup directory
+    build:
+      context: ./backup
+      args:
+        MARIADB_VERSION: ${DB_IMAGE_TAG:-10.6}
     networks:
       - magento-network
     volumes:
