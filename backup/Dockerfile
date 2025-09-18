@@ -17,5 +17,5 @@ RUN crontab /etc/cron.d/backup-cron
 # Create a log file for the cron job
 RUN touch /var/log/cron.log
 
-# Run the cron daemon in the foreground
-CMD ["cron", "-f"]
+# Set a new entrypoint to bypass the default db initialization and just run cron
+ENTRYPOINT ["cron", "-f"]
