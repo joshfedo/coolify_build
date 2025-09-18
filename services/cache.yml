@@ -1,6 +1,0 @@
-version: '3.8'
-services:
-  redis:
-    image: redis:${REDIS_IMAGE_TAG:-6.2-alpine}
-    networks:
-      - magento-network
