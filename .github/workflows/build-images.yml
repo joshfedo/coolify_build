@@ -1,0 +1,49 @@
+name: Build and Publish Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'db/**'
+      - 'backup/**'
+      - '.github/workflows/build-images.yml'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        mariadb_version: [ '10.6', '10.4' ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push db image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./db
+          push: true
+          tags: ghcr.io/${{ github.repository }}/db:${{ matrix.mariadb_version }}
+          build-args: |
+            MARIADB_VERSION=${{ matrix.mariadb_version }}
+
+      - name: Build and push db-backup image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backup
+          push: true
+          tags: ghcr.io/${{ github.repository }}/db-backup:${{ matrix.mariadb_version }}
+          build-args: |
+            MARIADB_VERSION=${{ matrix.mariadb_version }}
